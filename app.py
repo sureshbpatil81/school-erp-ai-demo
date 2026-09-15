@@ -329,8 +329,6 @@ def create_ui():
                 "Class 10 student count",
                 "Show me the expense breakdown",
             ],
-            retry_btn=None,
-            undo_btn=None,
         )
 
         # Footer
@@ -388,5 +386,5 @@ if __name__ == "__main__":
     demo.launch(
         share=False,  # Set to True to get a public URL
         server_name="0.0.0.0",  # Allow external connections
-        server_port=7860,  # Default Gradio port
+        server_port=int(os.environ.get("PORT", 7860)),  # Render port
     )
