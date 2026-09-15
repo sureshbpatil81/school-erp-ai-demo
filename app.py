@@ -488,8 +488,8 @@ def create_ui():
                         response = answer(message, history)
                         history = (history or []) + [[message, response]]
                         return history, ""
-                    send.click(submit_message, [msg, chatbot], [chatbot, msg], api_name=False, show_api=False)
-                    msg.submit(submit_message, [msg, chatbot], [chatbot, msg], api_name=False, show_api=False)
+                    send.click(submit_message, [msg, chatbot], [chatbot, msg], api_name=False)
+                    msg.submit(submit_message, [msg, chatbot], [chatbot, msg], api_name=False)
 
             with gr.Tab("Students & Fees"):
                 gr.Markdown("### Student attention", elem_classes="section-title")
