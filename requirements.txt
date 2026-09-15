@@ -4,7 +4,7 @@
 
 # Gradio - Creates the web UI (chat interface, dashboard)
 # This is what makes your app look nice and work in a browser
-gradio>=4.0.0
+gradio==4.44.1
 
 # Hugging Face Hub - Connects to free LLM (Mistral)
 # This lets us use AI without paying
