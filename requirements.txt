@@ -1,0 +1,19 @@
+# School ERP Demo - Dependencies
+# ================================
+# These are the Python packages needed to run the app
+
+# Gradio - Creates the web UI (chat interface, dashboard)
+# This is what makes your app look nice and work in a browser
+gradio>=4.0.0
+
+# Hugging Face Hub - Connects to free LLM (Mistral)
+# This lets us use AI without paying
+huggingface_hub>=0.20.0
+
+# Pandas - Data manipulation (tables, calculations)
+# Makes working with data easier
+pandas>=2.0.0
+
+# Python-dateutil - Date handling
+# Helps with date calculations
+python-dateutil>=2.8.0
