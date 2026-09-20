@@ -8,7 +8,7 @@ gradio==4.44.1
 
 # Hugging Face Hub - Connects to free LLM (Mistral)
 # This lets us use AI without paying
-huggingface_hub>=0.20.0
+huggingface_hub==0.25.2
 
 # Pandas - Data manipulation (tables, calculations)
 # Makes working with data easier
