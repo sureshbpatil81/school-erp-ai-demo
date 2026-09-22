@@ -289,6 +289,10 @@ def build_chat_interface() -> gr.ChatInterface:
       a TypeError. Passing them unconditionally means the app crashes on
       startup for anyone on the current release.
     - Building kwargs dynamically keeps this working on both versions.
+    - Gradio 5 also deprecated the old ('user', 'bot') tuple history in
+      favour of OpenAI-style {'role', 'content'} dicts, and warns on every
+      boot until you opt in. chat() ignores history, so switching format is
+      safe. Gradio 4 has no `type` argument, hence the version guard.
     """
     kwargs = dict(
         fn=chat,
@@ -300,6 +304,8 @@ def build_chat_interface() -> gr.ChatInterface:
     if major < 5:
         kwargs['retry_btn'] = None
         kwargs['undo_btn'] = None
+    else:
+        kwargs['type'] = 'messages'
 
     return gr.ChatInterface(**kwargs)
 
@@ -441,9 +447,16 @@ if __name__ == "__main__":
     print(f"🌐 Starting web server on 0.0.0.0:{port} ...")
     print("\n" + "=" * 50 + "\n")
 
-    create_ui().queue().launch(
+    # show_api is deprecated in Gradio 5 and removed in 6 (replaced by
+    # footer_links). It is only cosmetic - hiding the "Use via API" link - so
+    # pass it only where it is still supported rather than pinning the app to
+    # an old release for it.
+    launch_kwargs = dict(
         share=False,
         server_name="0.0.0.0",
         server_port=port,
-        show_api=False,
     )
+    if int(gr.__version__.split('.')[0]) < 5:
+        launch_kwargs['show_api'] = False
+
+    create_ui().queue().launch(**launch_kwargs)

@@ -9,9 +9,16 @@
 # Gradio - Creates the web UI (chat interface, dashboard)
 # This is what makes your app look nice and work in a browser
 # Works on both Gradio 4.x and 5.x (see build_chat_interface in app.py)
-# Upper bound: Gradio 6 changed the Chatbot/ChatInterface signature again and
-# would break the build on a fresh Render deploy.
-gradio>=4.44,<6.0
+# Upper bound matters: Gradio 6.x is published, and it REMOVES the
+# retry_btn/show_api arguments this app guards for, so an unbounded pin would
+# break a fresh Render build rather than just warn. Render currently resolves
+# 5.50.x under this constraint; app.py adapts its ChatInterface/launch kwargs
+# to whichever major is installed.
+gradio>=5.0,<6.0; python_version >= "3.10"
+
+# Python 3.9 (older local machines) cannot install Gradio 5, so fall back to
+# the last 4.x there. app.py supports both.
+gradio>=4.44,<5.0; python_version < "3.10"
 
 # Hugging Face Hub - Connects to free LLM (Mistral)
 # This lets us use AI without paying
