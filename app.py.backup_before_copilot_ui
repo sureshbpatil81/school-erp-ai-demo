@@ -319,12 +319,6 @@ def build_chat_interface() -> gr.ChatInterface:
         fn=copilot_chat,
         examples=EXAMPLE_QUESTIONS,
         cache_examples=False,
-        chatbot=gr.Chatbot(
-            height=650,
-            show_label=False,
-            bubble_full_width=False,
-            render_markdown=True,
-        ),
     )
 
     major = int(gr.__version__.split('.')[0])

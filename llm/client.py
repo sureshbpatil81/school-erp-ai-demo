@@ -26,6 +26,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from huggingface_hub import InferenceClient
 from config.settings import LLM_MODEL, HF_TOKEN, SCHOOL_NAME
 from modules.academics import AcademicsModule
+from .query_router import answer_factual_question
 from .prompts import build_context_prompt, build_query_prompt
 
 
@@ -84,6 +85,13 @@ class LLMClient:
         Returns:
             Generated response string
         """
+        # Resolve factual ERP questions directly from the database.
+        # The LLM is used only when the database router does not have a
+        # deterministic answer.
+        direct_answer = answer_factual_question(question)
+        if direct_answer is not None:
+            return direct_answer
+
         # If offline mode, use smart fallback directly
         if self.offline_mode or self.client is None:
             return self._generate_smart_response(question, context_data, additional_data)

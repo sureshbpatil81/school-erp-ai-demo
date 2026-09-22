@@ -161,6 +161,24 @@ class AcademicsModule:
         return execute_query(query, (limit,))
 
     @staticmethod
+    def get_subject_toppers(subject: str, limit: int = 10) -> list:
+        """Get highest-scoring students for one specific subject."""
+        query = """
+        SELECT
+            s.name,
+            s.class,
+            s.section,
+            r.marks,
+            r.grade
+        FROM exam_results r
+        JOIN students s ON r.student_id = s.id
+        WHERE r.subject = ?
+        ORDER BY r.marks DESC, s.name ASC
+        LIMIT ?
+        """
+        return execute_query(query, (subject, limit))
+
+    @staticmethod
     def get_students_needing_help(limit: int = 15) -> list:
         """
         Students who are failing AND have poor attendance.
