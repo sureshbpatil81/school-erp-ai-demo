@@ -25,6 +25,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from huggingface_hub import InferenceClient
 from config.settings import LLM_MODEL, HF_TOKEN, SCHOOL_NAME
+from modules.academics import AcademicsModule
 from .prompts import build_context_prompt, build_query_prompt
 
 
@@ -161,7 +162,29 @@ School average: {academics.get('overall_average', 0)}% · Pass rate: {academics.
 {body}
 **{academics.get('students_needing_help', 0)}** students are flagged for low marks or low attendance."""
 
-        if any(word in q for word in ['subject', 'marks', 'score', 'result', 'exam', 'grade', 'academic']):
+        # Subject-specific questions ("how many pass in maths?") must be
+        # handled BEFORE the generic academic branch, otherwise they would be
+        # answered with school-wide averages that ignore the named subject.
+        #
+        # But "who teaches Physics?" also names a subject while actually being
+        # a STAFF question, so defer to the teacher branch in that case.
+        asks_for_teacher = any(w in q for w in ['teach', 'teacher', 'faculty', 'who takes'])
+        subject = None if asks_for_teacher else AcademicsModule.resolve_subject(q)
+        if subject:
+            detail = AcademicsModule.get_subject_detail(subject)
+            if detail:
+                return f"""📝 **{detail['subject']}**
+
+• **Passed:** {detail['passed']:,} of {detail['total']:,} results ({detail['pass_rate']}%)
+• **Failed:** {detail['failed']:,}
+• **Average:** {detail['average']}%
+• **Range:** {detail['lowest']}% – {detail['highest']}%
+• **Students Assessed:** {detail['students']:,}
+
+_Pass mark is {AcademicsModule.PASS_MARK}%._"""
+
+        if any(word in q for word in ['subject', 'marks', 'score', 'result', 'exam',
+                                      'grade', 'academic', 'pass', 'fail', 'average']):
             response = f"""📝 **Academic Performance**
 
 • **School Average:** {academics.get('overall_average', 0)}%

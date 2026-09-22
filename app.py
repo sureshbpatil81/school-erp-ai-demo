@@ -182,13 +182,25 @@ def get_detailed_data(question: str) -> str:
                 extra += "\n\nTOP PERFORMERS:\n"
             extra += f"• {t['name']} (Class {t['class']}-{t['section']}): {t['average']}%\n"
 
-    if any(w in q for w in ['subject', 'marks', 'score', 'result', 'exam', 'grade']):
+    if any(w in q for w in ['subject', 'marks', 'score', 'result', 'exam', 'grade',
+                            'pass', 'fail', 'average']):
         subjects = AcademicsModule.get_subject_performance()
         if subjects:
             extra += "\n\nSUBJECT PERFORMANCE:\n"
             for s in subjects:
                 extra += (f"• {s['subject']}: avg {s['average']}%, "
                           f"{s['fail_count']} fails\n")
+
+    # If a specific subject is named ("how many pass in maths"), give the model
+    # that subject's own pass/fail numbers - the averages above cannot answer it.
+    named_subject = AcademicsModule.resolve_subject(q)
+    if named_subject and not any(w in q for w in ['teach', 'teacher', 'faculty']):
+        d = AcademicsModule.get_subject_detail(named_subject)
+        if d:
+            extra += (f"\n\n{d['subject'].upper()} DETAIL:\n"
+                      f"• Passed: {d['passed']} of {d['total']} ({d['pass_rate']}%)\n"
+                      f"• Failed: {d['failed']}\n"
+                      f"• Average: {d['average']}%, range {d['lowest']}-{d['highest']}%\n")
 
     if 'struggling' in q or 'needs help' in q or 'at risk' in q or 'weak' in q:
         for s in AcademicsModule.get_students_needing_help(10):

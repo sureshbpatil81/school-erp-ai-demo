@@ -23,6 +23,68 @@ class AcademicsModule:
 
     PASS_MARK = 40
 
+    # Maps what people actually type onto the subject names stored in the DB.
+    # Users write "maths", "bio", "sst" - never the full canonical name - so
+    # without this every subject-specific question misses and the assistant
+    # falls back to the generic school summary.
+    SUBJECT_ALIASES = {
+        'Mathematics':    ['math', 'maths', 'mathematics', 'maths', 'algebra', 'geometry'],
+        'Science':        ['science', 'sci', 'physics', 'chemistry', 'biology', 'bio'],
+        'English':        ['english', 'eng', 'language'],
+        'Hindi':          ['hindi'],
+        'Social Studies': ['social', 'social studies', 'sst', 'history',
+                           'geography', 'civics'],
+    }
+
+    @staticmethod
+    def resolve_subject(text: str) -> str:
+        """
+        Find which subject a free-text question is about.
+
+        Returns the canonical subject name, or None if the question does not
+        mention one. Longer aliases are tested first so "social studies" is
+        not shadowed by "social".
+
+        Example: "hoa many pass in maths" -> "Mathematics"
+        """
+        q = (text or "").lower()
+        best, best_len = None, 0
+        for subject, aliases in AcademicsModule.SUBJECT_ALIASES.items():
+            for alias in aliases:
+                if alias in q and len(alias) > best_len:
+                    best, best_len = subject, len(alias)
+        return best
+
+    @staticmethod
+    def get_subject_detail(subject: str) -> dict:
+        """
+        Pass/fail breakdown for a single subject.
+
+        Answers questions like "how many pass in maths?", which the
+        school-wide averages alone cannot.
+        """
+        query = """
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN marks >= ? THEN 1 ELSE 0 END) as passed,
+                SUM(CASE WHEN marks <  ? THEN 1 ELSE 0 END) as failed,
+                ROUND(AVG(marks), 1) as average,
+                ROUND(MIN(marks), 1) as lowest,
+                ROUND(MAX(marks), 1) as highest,
+                COUNT(DISTINCT student_id) as students
+            FROM exam_results
+            WHERE subject = ?
+        """
+        pm = AcademicsModule.PASS_MARK
+        rows = execute_query(query, (pm, pm, subject))
+        if not rows or not rows[0]['total']:
+            return {}
+
+        row = dict(rows[0])
+        row['subject'] = subject
+        row['pass_rate'] = round(row['passed'] / row['total'] * 100, 1)
+        return row
+
     @staticmethod
     def get_overall_average() -> float:
         """Get the school-wide average score."""
