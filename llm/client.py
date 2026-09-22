@@ -38,14 +38,18 @@ class LLMClient:
     - We can easily switch LLM providers by changing this class
     """
 
+    # After this many consecutive failures we stop trying to reach the network.
+    MAX_FAILURES = 2
+
     def __init__(self):
         """Initialize the LLM client."""
         # Try to create HuggingFace client, but work without it if blocked
         self.client = None
         self.offline_mode = False
+        self.failure_count = 0
 
         try:
-            self.client = InferenceClient(LLM_MODEL, token=HF_TOKEN)
+            self.client = InferenceClient(LLM_MODEL, token=HF_TOKEN, timeout=20)
             self.model_name = LLM_MODEL
         except Exception as e:
             print(f"⚠️ Could not connect to HuggingFace: {e}")
@@ -110,7 +114,18 @@ class LLMClient:
 
         except Exception as e:
             # Log the error (in production, use proper logging)
-            print(f"LLM Error: {str(e)}")
+            self.failure_count += 1
+            print(f"LLM Error ({self.failure_count}/{self.MAX_FAILURES}): {str(e)[:120]}")
+
+            # LEARNING POINT:
+            # Without this latch, every single question re-attempts a network
+            # call that we already know will fail - adding a multi-second
+            # stall to each answer. During a live demo on flaky conference
+            # wifi that is the difference between "instant" and "broken".
+            if self.failure_count >= self.MAX_FAILURES:
+                print("📴 Switching to OFFLINE MODE - using rule-based answers")
+                self.offline_mode = True
+                self.model_name = "Offline Mode (Rule-based)"
 
             # Return a smart fallback response
             return self._generate_smart_response(question, context_data, additional_data)
@@ -125,6 +140,51 @@ class LLMClient:
         staff = data.get('staff', {})
         accounts = data.get('accounts', {})
         attendance = data.get('attendance', {})
+        academics = data.get('academics', {})
+
+        # --- ACADEMIC QUERIES ------------------------------------------------
+        # Checked first because words like "student" appear in these questions
+        # too, and the student branch below would otherwise swallow them.
+        if any(word in q for word in ['topper', 'top performer', 'best student', 'rank']):
+            body = ""
+            if 'TOP PERFORMERS' in additional_data:
+                body = additional_data.split('TOP PERFORMERS:')[1].split('\n\n')[0]
+            return f"""🏆 **Top Performers**
+{body}
+School average: {academics.get('overall_average', 0)}% · Pass rate: {academics.get('pass_rate', 0)}%"""
+
+        if any(word in q for word in ['struggling', 'needs help', 'at risk', 'weak student']):
+            body = ""
+            if 'STUDENTS NEEDING SUPPORT' in additional_data:
+                body = additional_data.split('STUDENTS NEEDING SUPPORT:')[1].split('\n\n')[0]
+            return f"""🆘 **Students Needing Support**
+{body}
+**{academics.get('students_needing_help', 0)}** students are flagged for low marks or low attendance."""
+
+        if any(word in q for word in ['subject', 'marks', 'score', 'result', 'exam', 'grade', 'academic']):
+            response = f"""📝 **Academic Performance**
+
+• **School Average:** {academics.get('overall_average', 0)}%
+• **Pass Rate:** {academics.get('pass_rate', 0)}%
+• **Strongest Subject:** {academics.get('best_subject', 'N/A')}
+• **Needs Focus:** {academics.get('weakest_subject', 'N/A')}
+"""
+            if 'SUBJECT PERFORMANCE' in additional_data:
+                response += "\n**By Subject:**" + \
+                    additional_data.split('SUBJECT PERFORMANCE:')[1].split('\n\n')[0]
+            return response
+
+        # --- LEAVE QUERIES ---------------------------------------------------
+        if 'leave' in q:
+            body = ""
+            if 'PENDING LEAVE REQUESTS' in additional_data:
+                body = "\n**Awaiting approval:**" + \
+                    additional_data.split('PENDING LEAVE REQUESTS:')[1].split('\n\n')[0]
+            return f"""🏖️ **Staff Leave**
+
+• **Upcoming approved leave:** {staff.get('on_leave', 0)}
+• **Pending approval:** {staff.get('pending_leaves', 0)}
+{body}"""
 
         # STUDENT QUERIES
         if any(word in q for word in ['student', 'enrolled', 'admission', 'strength']):
@@ -171,7 +231,8 @@ For detailed class-wise breakdown, the system shows equal distribution across cl
 • **Fee Collection Rate:** {collection_rate}%"""
 
         # STAFF QUERIES
-        if any(word in q for word in ['staff', 'teacher', 'employee', 'faculty']):
+        # NOTE: 'teach' (not 'teacher') so that "Who teaches Maths?" matches
+        if any(word in q for word in ['staff', 'teach', 'employee', 'faculty']):
             total_staff = staff.get('total_staff', 0)
             teachers = staff.get('teachers', 0)
             admin = staff.get('admin', 0)
@@ -185,14 +246,23 @@ For detailed class-wise breakdown, the system shows equal distribution across cl
 • **Annual Salary Expense:** ₹{monthly * 12:,.0f}
 • **Total Staff:** {total_staff}"""
 
-            if any(word in q for word in ['math', 'physics', 'chemistry', 'english', 'hindi', 'science']):
-                subject = [w for w in ['math', 'physics', 'chemistry', 'english', 'hindi', 'science'] if w in q][0]
+            subject_words = ['math', 'physics', 'chemistry', 'biology', 'english',
+                             'hindi', 'science', 'computer', 'sanskrit', 'art', 'music']
+            if any(word in q for word in subject_words):
+                subject = [w for w in subject_words if w in q][0]
+
+                # app.get_detailed_data() already looked the teachers up for us,
+                # so we can name them instead of saying "check the directory".
+                if 'TEACHERS:' in additional_data:
+                    names = additional_data.split('TEACHERS:')[1].split('\n\n')[0]
+                    return f"""👨‍🏫 **{subject.title()} Teachers**
+{names}
+Total teaching staff: {teachers}"""
+
                 return f"""👨‍🏫 **{subject.title()} Teachers**
 
-The school has dedicated {subject.title()} teachers in the faculty.
-For specific teacher names and details, please check the staff directory.
-
-Total Teaching Staff: {teachers}"""
+No teacher is currently assigned to {subject.title()}.
+Total teaching staff: {teachers}"""
 
             return f"""👥 **Staff Summary**
 
@@ -213,6 +283,27 @@ Total Teaching Staff: {teachers}"""
 Salary is the largest expense category for the school."""
 
         # ACCOUNTS / MONEY QUERIES
+        # The comparison check must come FIRST: "compare income vs expenses"
+        # contains the word "income", so the income branch below would
+        # otherwise answer it with only half the picture.
+        if 'compare' in q or ' vs ' in q or 'versus' in q:
+            income = accounts.get('total_income', 0)
+            expense = accounts.get('total_expenses', 0)
+            balance = accounts.get('balance', 0)
+
+            response = f"""📊 **Income vs Expenses**
+
+| Category | Amount |
+|----------|--------|
+| Income | ₹{income:,.0f} |
+| Expenses | ₹{expense:,.0f} |
+| **Balance** | **₹{balance:,.0f}** |
+"""
+            if 'MONTHLY COMPARISON' in additional_data:
+                response += "\n**Month by month:**" + \
+                    additional_data.split('MONTHLY COMPARISON:')[1].split('\n\n')[0]
+            return response
+
         if any(word in q for word in ['income', 'revenue', 'collection', 'money', 'earning']):
             total_income = accounts.get('total_income', 0)
             return f"""📈 **Income Summary**
@@ -358,20 +449,30 @@ These students may need attention and parent communication."""
         return self._get_summary_response(data)
 
     def _get_summary_response(self, data: dict) -> str:
-        """Generate a summary response when we can't understand the question."""
+        """
+        Generate a summary response when we can't understand the question.
+
+        LEARNING POINT:
+        - The old version formatted the student count with `:,` while
+          defaulting to the string 'N/A'. Applying a numeric format to a string
+          raises TypeError, so an empty database crashed the chat instead of
+          showing "no data". Defaulting to 0 keeps the format safe.
+        """
         students = data.get('students', {})
         staff = data.get('staff', {})
         accounts = data.get('accounts', {})
         attendance = data.get('attendance', {})
+        academics = data.get('academics', {})
 
         return f"""Here's a summary of {SCHOOL_NAME}:
 
 📊 **Students**
-• Total: {students.get('total_students', 'N/A'):,}
+• Total: {students.get('total_students', 0):,}
 • Pending Fees: ₹{students.get('fees_pending', 0):,.0f}
+• Collection Rate: {students.get('fee_collection_rate', 0)}%
 
 👨‍🏫 **Staff**
-• Total: {staff.get('total_staff', 'N/A')}
+• Total: {staff.get('total_staff', 0)}
 • Monthly Salary: ₹{staff.get('monthly_salary', 0):,.0f}
 
 💰 **Accounts**
@@ -381,12 +482,17 @@ These students may need attention and parent communication."""
 
 📅 **Attendance**
 • Today: {attendance.get('today_percentage', 0)}%
+• Below threshold: {attendance.get('chronic_absentees_count', 0)} students
+
+📝 **Academics**
+• Average Score: {academics.get('overall_average', 0)}%
+• Pass Rate: {academics.get('pass_rate', 0)}%
 
 Ask me specific questions like:
 • "How many students in Class 10?"
 • "Show fee defaulters"
-• "Total salary expenses"
-• "Today's attendance"
+• "Which students are below 75% attendance?"
+• "Who are the top performers?"
 """
 
     def get_model_info(self) -> dict:

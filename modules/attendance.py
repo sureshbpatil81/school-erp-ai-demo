@@ -202,7 +202,13 @@ class AttendanceModule:
 
     @staticmethod
     def get_attendance_trend(days: int = 7) -> list:
-        """Get daily attendance trend for recent days."""
+        """
+        Get daily attendance trend for recent days, oldest first.
+
+        LEARNING POINT:
+        - SQL gives us the newest rows with ORDER BY DESC + LIMIT, but a chart
+          must read left-to-right in time order, so we reverse the result.
+        """
         query = """
             SELECT
                 date,
@@ -215,7 +221,31 @@ class AttendanceModule:
             ORDER BY date DESC
             LIMIT ?
         """
-        return execute_query(query, (days,))
+        return list(reversed(execute_query(query, (days,))))
+
+    @staticmethod
+    def get_monthly_trend() -> list:
+        """Month-wise attendance percentage."""
+        query = """
+            SELECT
+                strftime('%Y-%m', date) as month,
+                ROUND(SUM(CASE WHEN status IN ('present','late') THEN 1.0 ELSE 0 END)
+                      / COUNT(*) * 100, 1) as percentage
+            FROM attendance
+            GROUP BY month
+            ORDER BY month
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_status_breakdown() -> list:
+        """Overall present/absent/late counts - good for a donut chart."""
+        query = """
+            SELECT status, COUNT(*) as count
+            FROM attendance
+            GROUP BY status
+        """
+        return execute_query(query)
 
     @staticmethod
     def get_lowest_attendance_classes(limit: int = 5) -> list:

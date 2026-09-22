@@ -115,14 +115,52 @@ class StaffModule:
 
     @staticmethod
     def get_staff_on_leave() -> list:
-        """Get staff currently on leave."""
+        """Get staff with approved leave from today onwards."""
         query = """
-            SELECT s.name, s.designation, s.role, l.date, l.leave_type
+            SELECT s.name, s.designation, s.role, l.date, l.leave_type, l.reason
             FROM staff s
             JOIN leave_requests l ON s.id = l.staff_id
             WHERE l.status = 'approved'
             AND l.date >= date('now')
             ORDER BY l.date
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_pending_leave_requests() -> list:
+        """Leave requests still awaiting a decision - an actionable to-do list."""
+        query = """
+            SELECT s.name, s.designation, l.date, l.leave_type, l.reason
+            FROM staff s
+            JOIN leave_requests l ON s.id = l.staff_id
+            WHERE l.status = 'pending'
+            ORDER BY l.date
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_department_distribution() -> list:
+        """Staff count and salary cost per department."""
+        query = """
+            SELECT department,
+                   COUNT(*) as count,
+                   SUM(salary) as total_salary
+            FROM staff
+            WHERE status = 'active' AND department IS NOT NULL
+            GROUP BY department
+            ORDER BY count DESC
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_subject_coverage() -> list:
+        """How many teachers cover each subject - reveals staffing gaps."""
+        query = """
+            SELECT subject, COUNT(*) as teachers
+            FROM staff
+            WHERE role = 'teacher' AND subject IS NOT NULL
+            GROUP BY subject
+            ORDER BY teachers ASC
         """
         return execute_query(query)
 
@@ -199,5 +237,7 @@ class StaffModule:
             'admin': by_role.get('admin', 0),
             'support': by_role.get('support', 0),
             'monthly_salary': salary_total,
-            'annual_salary': salary_total * 12
+            'annual_salary': salary_total * 12,
+            'on_leave': len(StaffModule.get_staff_on_leave()),
+            'pending_leaves': len(StaffModule.get_pending_leave_requests()),
         }

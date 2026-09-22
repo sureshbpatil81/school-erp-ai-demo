@@ -72,14 +72,15 @@ def build_context_prompt(data: dict) -> str:
         Formatted context string for the LLM
     """
 
+    # Defaulting to 0 (not 'N/A') keeps the ":," number formatting below safe
     context = f"""
 === CURRENT SCHOOL DATA ===
 
 STUDENT SUMMARY:
-• Total Students: {data.get('students', {}).get('total_students', 'N/A'):,}
-• Male: {data.get('students', {}).get('male_count', 'N/A'):,}
-• Female: {data.get('students', {}).get('female_count', 'N/A'):,}
-• Students with Pending Fees: {data.get('students', {}).get('students_with_pending', 'N/A')}
+• Total Students: {data.get('students', {}).get('total_students', 0):,}
+• Male: {data.get('students', {}).get('male_count', 0):,}
+• Female: {data.get('students', {}).get('female_count', 0):,}
+• Students with Pending Fees: {data.get('students', {}).get('students_with_pending', 0)}
 • Total Pending Amount: ₹{data.get('students', {}).get('fees_pending', 0):,.0f}
 • Fee Collection Rate: {data.get('students', {}).get('fee_collection_rate', 0)}%
 
@@ -116,6 +117,17 @@ ATTENDANCE SUMMARY:
 • Absent Today: {data.get('attendance', {}).get('today_absent', 0)}
 • Overall Attendance: {data.get('attendance', {}).get('overall_percentage', 0)}%
 • Students Below 75% Attendance: {data.get('attendance', {}).get('chronic_absentees_count', 0)}
+
+ACADEMIC SUMMARY:
+• School Average Score: {data.get('academics', {}).get('overall_average', 0)}%
+• Pass Rate: {data.get('academics', {}).get('pass_rate', 0)}%
+• Strongest Subject: {data.get('academics', {}).get('best_subject', 'N/A')}
+• Weakest Subject: {data.get('academics', {}).get('weakest_subject', 'N/A')}
+• Students Needing Support: {data.get('academics', {}).get('students_needing_help', 0)}
+
+STAFF LEAVE:
+• Upcoming Approved Leave: {data.get('staff', {}).get('on_leave', 0)}
+• Pending Leave Requests: {data.get('staff', {}).get('pending_leaves', 0)}
 """
 
     return context

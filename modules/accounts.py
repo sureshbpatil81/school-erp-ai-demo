@@ -226,26 +226,42 @@ class AccountsModule:
 
     @staticmethod
     def get_monthly_comparison(year: int = None) -> list:
-        """Get month-wise income vs expenses comparison."""
-        year = year or datetime.now().year
-
-        # Get monthly income
-        income_query = """
-            SELECT strftime('%Y-%m', date) as month, SUM(amount) as income
-            FROM income
-            WHERE strftime('%Y', date) = ?
-            GROUP BY month
         """
-        income_data = {row['month']: row['income'] for row in execute_query(income_query, (str(year),))}
+        Get month-wise income vs expenses comparison.
 
-        # Get monthly expenses
-        expense_query = """
-            SELECT strftime('%Y-%m', date) as month, SUM(amount) as expenses
-            FROM expenses
-            WHERE strftime('%Y', date) = ?
-            GROUP BY month
+        LEARNING POINT:
+        - Passing year=None returns EVERY month in the database. The old code
+          defaulted to the current calendar year, which silently hid the chart
+          whenever the demo data straddled a year boundary (e.g. Nov-Feb).
         """
-        expense_data = {row['month']: row['expenses'] for row in execute_query(expense_query, (str(year),))}
+        if year:
+            income_query = """
+                SELECT strftime('%Y-%m', date) as month, SUM(amount) as income
+                FROM income
+                WHERE strftime('%Y', date) = ?
+                GROUP BY month
+            """
+            income_rows = execute_query(income_query, (str(year),))
+
+            expense_query = """
+                SELECT strftime('%Y-%m', date) as month, SUM(amount) as expenses
+                FROM expenses
+                WHERE strftime('%Y', date) = ?
+                GROUP BY month
+            """
+            expense_rows = execute_query(expense_query, (str(year),))
+        else:
+            income_rows = execute_query("""
+                SELECT strftime('%Y-%m', date) as month, SUM(amount) as income
+                FROM income GROUP BY month
+            """)
+            expense_rows = execute_query("""
+                SELECT strftime('%Y-%m', date) as month, SUM(amount) as expenses
+                FROM expenses GROUP BY month
+            """)
+
+        income_data = {row['month']: row['income'] for row in income_rows}
+        expense_data = {row['month']: row['expenses'] for row in expense_rows}
 
         # Combine
         months = sorted(set(list(income_data.keys()) + list(expense_data.keys())))
@@ -285,6 +301,41 @@ class AccountsModule:
         }
 
     @staticmethod
+    def get_payment_mode_split() -> list:
+        """How parents actually pay - cash vs UPI vs bank vs cheque."""
+        query = """
+            SELECT payment_mode, COUNT(*) as count, SUM(amount) as total
+            FROM income
+            GROUP BY payment_mode
+            ORDER BY total DESC
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_current_month_snapshot() -> dict:
+        """Income, expenses and balance for the current calendar month."""
+        month = datetime.now().strftime('%Y-%m')
+
+        income = execute_query("""
+            SELECT SUM(amount) as total FROM income
+            WHERE strftime('%Y-%m', date) = ?
+        """, (month,))
+        expenses = execute_query("""
+            SELECT SUM(amount) as total FROM expenses
+            WHERE strftime('%Y-%m', date) = ?
+        """, (month,))
+
+        inc = (income[0]['total'] or 0) if income else 0
+        exp = (expenses[0]['total'] or 0) if expenses else 0
+
+        return {
+            'month': month,
+            'income': inc,
+            'expenses': exp,
+            'balance': inc - exp,
+        }
+
+    @staticmethod
     def get_summary() -> dict:
         """Get overall accounts summary for dashboard."""
         balance = AccountsModule.get_balance()
@@ -292,6 +343,7 @@ class AccountsModule:
         expense_by_cat = AccountsModule.get_expenses_by_category()
 
         return {
+            'this_month': AccountsModule.get_current_month_snapshot(),
             'total_income': balance['total_income'],
             'total_expenses': balance['total_expenses'],
             'balance': balance['balance'],

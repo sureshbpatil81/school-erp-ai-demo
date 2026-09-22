@@ -1,10 +1,30 @@
+# Render Blueprint - School ERP AI Assistant
+# =============================================
+# Deploy: Render Dashboard -> New -> Blueprint -> point at this repo.
+#
+# NOTES:
+# - This repo's root IS the app folder, so rootDir is intentionally NOT set.
+# - The app binds to $PORT (injected by Render). See the __main__ block in app.py.
+# - The SQLite demo database is regenerated on boot if empty, so no disk is
+#   strictly required. The filesystem is ephemeral on the free plan: any data
+#   written at runtime is lost on redeploy/restart. That is fine for a demo.
+
 services:
   - type: web
     name: school-erp-ai
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python app.py
+    healthCheckPath: /
+    autoDeploy: true
+    plan: free
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11"
-    plan: free
+        value: "3.11.9"
+      # Gradio writes temp/flagged files; keep them inside the writable dir.
+      - key: GRADIO_ANALYTICS_ENABLED
+        value: "False"
+      # Optional: set in the Render dashboard to raise Hugging Face rate limits.
+      # The app falls back to a rule-based responder when this is absent.
+      - key: HF_TOKEN
+        sync: false

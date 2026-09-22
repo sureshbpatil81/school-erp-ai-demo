@@ -9,9 +9,26 @@ An AI-powered school management system that lets you query school data using nat
 ## 🎯 What This Does
 
 - **Chat Interface**: Ask questions in plain English
-- **4 Modules**: Students, Staff, Accounts, Attendance
-- **LLM-Powered**: Uses Mistral 7B (free) for understanding
-- **Demo Data**: 1000 students, 50 staff, 4 months of data
+- **Visual Dashboard**: 7 tabs of KPI cards, charts and drill-down tables
+- **5 Modules**: Students, Staff, Accounts, Attendance, Academics
+- **LLM-Powered**: Uses Mistral 7B (free), with a rule-based offline fallback
+- **Demo Data**: 1,000 students, 52 staff, 6 months of transactions,
+  120,000 attendance records and 20,000 exam results
+- **Zero chart dependencies**: every graph is hand-built SVG
+
+---
+
+## 📸 The Dashboard
+
+| Tab | What it shows |
+|-----|---------------|
+| 💬 **Ask AI** | Natural-language chat over all school data |
+| 📊 **Overview** | Headline KPIs + a "needs attention" alert panel |
+| 👨‍🎓 **Students** | Class strength, pending fees by class, transport, defaulters |
+| 👨‍🏫 **Staff** | Departments, subject coverage, payroll, leave approvals |
+| 💰 **Accounts** | Income vs expenses by month, category donuts, payment modes |
+| 📅 **Attendance** | Trend line, per-class bars, students below threshold |
+| 📝 **Academics** | Subject averages, grade distribution, toppers, at-risk list |
 
 ---
 
@@ -53,28 +70,39 @@ python app.py
 ```
 school-erp-demo/
 │
-├── app.py                 # ⭐ Main application (START HERE)
+├── app.py                 # ⭐ Main application - wiring only (START HERE)
 ├── requirements.txt       # Dependencies
-├── README.md             # This file
+├── README.md              # This file
 │
 ├── config/
-│   └── settings.py       # All configuration (school name, fees, etc.)
+│   └── settings.py        # All configuration (school, fees, profiles)
 │
 ├── database/
-│   ├── connection.py     # Database connection utilities
-│   ├── schema.py         # Table definitions
-│   └── demo_data.py      # Generates fake data
+│   ├── connection.py      # Database connection utilities
+│   ├── schema.py          # Table definitions + migrations
+│   └── demo_data.py       # Generates realistic, self-consistent data
 │
-├── modules/
-│   ├── students.py       # Student queries
-│   ├── staff.py          # Staff queries
-│   ├── accounts.py       # Income/expense queries
-│   └── attendance.py     # Attendance queries
+├── modules/               # One class per domain = the "tools"
+│   ├── students.py        # Student queries
+│   ├── staff.py           # Staff + leave queries
+│   ├── accounts.py        # Income/expense queries
+│   ├── attendance.py      # Attendance queries
+│   └── academics.py       # Exam results and performance
+│
+├── ui/                    # All presentation code
+│   ├── theme.py           # Colour palette + CSS
+│   ├── charts.py          # SVG bar/line/donut/progress charts
+│   ├── cards.py           # KPI cards, alerts, tables
+│   └── views.py           # Composes one function per dashboard tab
 │
 └── llm/
-    ├── client.py         # LLM connection
-    └── prompts.py        # AI prompts
+    ├── client.py          # LLM connection + offline fallback
+    └── prompts.py         # AI prompts
 ```
+
+**Layering:** `modules/` answers *what the data is*, `ui/` decides *how it
+looks*, and `app.py` only wires the two together. You can redesign the whole
+dashboard without touching a single SQL query.
 
 ---
 
@@ -129,7 +157,61 @@ FEE_STRUCTURE = {
 ```
 
 ### Regenerate Demo Data
-Delete `school_data.db` and restart the app.
+
+```bash
+python -m database.demo_data --force
+```
+
+The generator uses a **fixed random seed**, so the numbers are identical every
+time you run the demo. All dates are generated **relative to today**, so
+"today's attendance" is always genuinely today.
+
+### Tune the story the data tells
+
+`config/settings.py` → `STUDENT_PROFILES` controls the mix of students:
+
+```python
+STUDENT_PROFILES = [
+    # name,       weight, attendance_rate, fee_status
+    ("excellent",  0.45,   0.98,  "paid"),
+    ("regular",    0.33,   0.93,  "paid"),
+    ("irregular",  0.14,   0.82,  "partial"),
+    ("at_risk",    0.06,   0.68,  "partial"),
+    ("critical",   0.02,   0.52,  "pending"),
+]
+```
+
+Each student's profile drives their attendance, their fees **and** their exam
+marks. Raise the `at_risk` weight and the "students needing support" list grows
+accordingly — everything stays consistent.
+
+---
+
+## 🎬 Suggested Demo Flow
+
+1. **Overview tab** — lead with the KPI cards and the "needs attention" panel.
+2. **Ask AI** — *"Which students are below 75% attendance?"*
+3. **Attendance tab** — show the same students in the dashboard, with parent
+   phone numbers ready to call.
+4. **Ask AI** — *"Which students are struggling?"* — this joins low marks with
+   low attendance to explain *why*.
+5. **Accounts tab** — month-on-month income vs expenses.
+6. **Ask AI** — *"Compare income vs expenses by month"* — same answer, in words.
+
+The point to land: **the chat and the dashboard read from the same data**, so
+the AI can never contradict the numbers on screen.
+
+---
+
+## ✅ Data Integrity
+
+The demo data is intentionally self-consistent:
+
+- `SUM(total_fees) - SUM(fees_pending)` exactly equals total fee income
+- A student marked `pending` genuinely has missing payment rows
+- Exam marks correlate with attendance, so "at risk" students are believable
+- ~60 students fall below the 75% attendance threshold, so that query is never
+  an empty list
 
 ---
 

@@ -180,6 +180,45 @@ class StudentModule:
         return execute_query(query, (class_num,))
 
     @staticmethod
+    def get_class_section_matrix() -> list:
+        """Student count per class AND section - used by the dashboard table."""
+        query = """
+            SELECT class, section, COUNT(*) as count,
+                   SUM(CASE WHEN gender = 'M' THEN 1 ELSE 0 END) as male,
+                   SUM(CASE WHEN gender = 'F' THEN 1 ELSE 0 END) as female,
+                   SUM(fees_pending) as pending
+            FROM students
+            GROUP BY class, section
+            ORDER BY class, section
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_transport_usage() -> list:
+        """Students per transport route."""
+        query = """
+            SELECT transport_route as route, COUNT(*) as students
+            FROM students
+            WHERE transport_route IS NOT NULL
+            GROUP BY transport_route
+            ORDER BY students DESC
+        """
+        return execute_query(query)
+
+    @staticmethod
+    def get_class_wise_pending() -> list:
+        """Pending fee amount per class - highlights where dues concentrate."""
+        query = """
+            SELECT class,
+                   SUM(fees_pending) as pending,
+                   COUNT(CASE WHEN fees_pending > 0 THEN 1 END) as defaulters
+            FROM students
+            GROUP BY class
+            ORDER BY class
+        """
+        return execute_query(query)
+
+    @staticmethod
     def get_summary() -> dict:
         """Get overall student summary for dashboard."""
         total = StudentModule.get_total_count()

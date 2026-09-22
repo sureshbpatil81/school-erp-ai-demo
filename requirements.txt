@@ -1,7 +1,26 @@
-# School ERP AI Demo - pinned production dependencies
-gradio==4.44.1
-huggingface_hub>=0.20.0
-pandas>=2.0.0
-matplotlib>=3.8,<4
+# School ERP Demo - Dependencies
+# ================================
+# These are the Python packages needed to run the app.
+#
+# NOTE: the dashboard charts are hand-built SVG (see ui/charts.py), so there is
+# deliberately NO plotting library here. Fewer dependencies means a faster,
+# more reliable cold start on a free Hugging Face Space.
+
+# Gradio - Creates the web UI (chat interface, dashboard)
+# This is what makes your app look nice and work in a browser
+# Works on both Gradio 4.x and 5.x (see build_chat_interface in app.py)
+# Upper bound: Gradio 6 changed the Chatbot/ChatInterface signature again and
+# would break the build on a fresh Render deploy.
+gradio>=4.44,<6.0
+
+# Hugging Face Hub - Connects to free LLM (Mistral)
+# This lets us use AI without paying
+huggingface_hub>=0.20.0,<1.0
+
+# Pandas - Data manipulation (tables, calculations)
+# Makes working with data easier
+pandas>=2.0.0,<3.0
+
+# Python-dateutil - Date handling
+# Helps with date calculations
 python-dateutil>=2.8.0
-Pillow>=10.0

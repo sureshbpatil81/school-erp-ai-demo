@@ -28,8 +28,20 @@ SCHOOL_EMAIL = "info@abcschool.edu"
 # =============================================================================
 # SQLite for demo (file-based, simple)
 # Change to PostgreSQL/Supabase for production
+#
+# DEPLOYMENT NOTE (Render / any PaaS):
+# The path must be ABSOLUTE. Render starts the process from the repo root but
+# the working directory is not guaranteed, and a relative path would silently
+# create an empty database somewhere else - the app would then boot with zero
+# students. We anchor the file to this project folder, and allow an override
+# via DATABASE_PATH so a mounted persistent disk can be used instead.
 
-DATABASE_PATH = "school_data.db"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+DATABASE_PATH = os.environ.get(
+    "DATABASE_PATH",
+    os.path.join(BASE_DIR, "school_data.db"),
+)
 
 # =============================================================================
 # LLM SETTINGS
@@ -67,6 +79,9 @@ FEE_STRUCTURE = {
     12: 7000,  # Class 12
 }
 
+# Annual fee = monthly fee x number of billed months in the session
+FEE_MONTHS_PER_SESSION = 10
+
 # =============================================================================
 # DEMO DATA SETTINGS
 # =============================================================================
@@ -77,9 +92,70 @@ DEMO_SETTINGS = {
     "total_teachers": 40,
     "total_admin_staff": 5,
     "total_support_staff": 5,
-    "months_of_data": 4,  # Generate 4 months of transactions
-    "attendance_days": 80,  # School days to generate
+    "months_of_data": 6,  # Generate 6 months of transactions
+    "attendance_days": 120,  # School days to generate
+    "random_seed": 20240601,  # Fixed seed => the same demo every run
 }
+
+# =============================================================================
+# STUDENT BEHAVIOUR PROFILES
+# =============================================================================
+# Each student is assigned a profile. This is what makes the demo interesting:
+# without it every student looks identical and queries like
+# "students below 75% attendance" return an empty list.
+#
+# weight          = share of students with this profile
+# attendance_rate = probability the student shows up on a given day
+# fee_status      = how this student is billed
+
+STUDENT_PROFILES = [
+    # name,         weight, attendance_rate, fee_status
+    ("excellent",    0.45,   0.98,  "paid"),
+    ("regular",      0.33,   0.93,  "paid"),
+    ("irregular",    0.14,   0.82,  "partial"),
+    ("at_risk",      0.06,   0.68,  "partial"),
+    ("critical",     0.02,   0.52,  "pending"),
+]
+
+# =============================================================================
+# TRANSPORT
+# =============================================================================
+# Route name -> monthly fare. Used for transport income and route-wise reports.
+
+TRANSPORT_ROUTES = {
+    "Route 1 - City Centre": 1500,
+    "Route 2 - Lake View": 1800,
+    "Route 3 - Industrial Area": 2000,
+    "Route 4 - Airport Road": 2400,
+    "Route 5 - Old Town": 1600,
+}
+
+# =============================================================================
+# INCOME / EXPENSE CATEGORIES
+# =============================================================================
+# Richer categories give the dashboard charts something to show.
+
+INCOME_CATEGORIES = [
+    "fees", "transport", "donation", "hostel", "exam", "events", "library"
+]
+
+EXPENSE_CATEGORIES = [
+    "salary", "utilities", "maintenance", "supplies",
+    "transport", "events", "technology", "training"
+]
+
+# =============================================================================
+# ACADEMIC SETTINGS
+# =============================================================================
+
+EXAM_TERMS = ["Unit Test 1", "Mid Term", "Unit Test 2", "Final Term"]
+
+GRADE_BANDS = [
+    (90, "A+"), (80, "A"), (70, "B+"), (60, "B"),
+    (50, "C"), (40, "D"), (0, "F"),
+]
+
+ATTENDANCE_THRESHOLD = 75  # Below this % a student is flagged
 
 # =============================================================================
 # SALARY STRUCTURE
